@@ -360,6 +360,8 @@ const invalidOriginEntries = [
   'ftp://trusted.com',
   'https://user@trusted.com',
   'https://trusted.com/path',
+  'https://trusted.com/./',
+  'https://trusted.com/%2e',
   'https://trusted.com/?x=1',
   'https://trusted.com/#x',
   'https://trusted.com?',
@@ -399,4 +401,31 @@ test('configuration arrays are copied at guard creation time', () => {
   hosts[0] = 'evil.com';
   assert.equal(guard.isSafe('https://trusted.com/x'), true);
   assert.equal(guard.isSafe('https://evil.com/x'), false);
+});
+
+test('empty explicit port canonicalizes to the default port', () => {
+  assert.equal(
+    cjs.assertSafeRedirect('https://trusted.com:/path', exactOrigin),
+    'https://trusted.com/path'
+  );
+});
+
+test('IPv6 mapped IPv4 literal is rejected without explicit opt-in', () => {
+  const result = parseUnsafe(cjs, 'https://[::ffff:127.0.0.1]/x', exactOrigin);
+  assert.equal(result.code, C.IP_LITERAL);
+});
+
+test('IPv6 mapped IPv4 literal canonicalizes before allowlist matching', () => {
+  const options = { allowedHosts: ['[::ffff:127.0.0.1]'], allowIpLiterals: true };
+  assert.equal(
+    cjs.assertSafeRedirect('https://[::ffff:127.0.0.1]/x', options),
+    'https://[::ffff:7f00:1]/x'
+  );
+});
+
+test('ideographic full stop canonicalizes as a host separator', () => {
+  assert.equal(
+    cjs.assertSafeRedirect('https://trusted。com/x', exactOrigin),
+    'https://trusted.com/x'
+  );
 });

@@ -63,7 +63,7 @@ test('fuzz: hostile control mutations never throw', () => {
     const input = base.slice(0, position) + controls[Math.floor(rng() * controls.length)] + base.slice(position);
     const result = cjs.parseRedirectLocation(input);
     assert.equal(result.safe, false, JSON.stringify(input));
-    assert.ok([C.CONTROL_CHARACTER, C.MALFORMED_ENCODING].includes(result.code), JSON.stringify(input));
+    assert.ok([C.CONTROL_CHARACTER, C.MALFORMED_ENCODING, C.INVALID_UTF8].includes(result.code), JSON.stringify(input));
   }
 });
 

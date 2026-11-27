@@ -59,7 +59,8 @@ const parityCases = [
   ['https://eviltrusted.com/x', { allowedHosts: ['trusted.com'], allowSubdomains: true }],
   ['https://127.1/x', { allowedHosts: ['trusted.com'] }],
   ['https://user@trusted.com/x', { allowedHosts: ['trusted.com'], allowUserinfo: true }],
-  ['/l%6fgout', { blockedPaths: ['/logout'] }]
+  ['/l%6fgout', { blockedPaths: ['/logout'] }],
+  ['/%c0%af/evil.com', undefined]
 ];
 
 for (const [input, options] of parityCases) {

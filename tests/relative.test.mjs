@@ -268,6 +268,12 @@ test('unpaired surrogate input is rejected', () => {
   assert.equal(result.code, C.CONTROL_CHARACTER);
 });
 
-test('encoded invalid UTF-8 bytes do not become structural characters', () => {
-  assert.equal(cjs.assertSafeRedirect('/%ff%fe'), '/%FF%FE');
+test('encoded invalid UTF-8 bytes are rejected', () => {
+  const result = parseUnsafe(cjs, '/%ff%fe');
+  assert.equal(result.code, C.INVALID_UTF8);
+});
+
+test('nested encoded invalid UTF-8 bytes are rejected', () => {
+  const result = parseUnsafe(cjs, '/%25ff%25fe');
+  assert.equal(result.code, C.INVALID_UTF8);
 });

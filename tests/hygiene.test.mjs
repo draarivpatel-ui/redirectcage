@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { cjs } from './helpers.mjs';
 
-const EXPECTED_TEST_COUNT = 416;
+const EXPECTED_TEST_COUNT = 444;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_ENTRIES = new Set(['.git', 'node_modules', '.DS_Store']);
 
@@ -156,5 +156,5 @@ test('runtime error codes are frozen and unique', () => {
   assert.equal(Object.isFrozen(cjs.CODE), true);
   const values = Object.values(cjs.CODE);
   assert.equal(new Set(values).size, values.length);
-  for (const value of values) assert.match(value, /^ERR_REDIRECTCAGE_[A-Z_]+$/);
+  for (const value of values) assert.match(value, /^ERR_REDIRECTCAGE_[A-Z0-9_]+$/);
 });

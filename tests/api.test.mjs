@@ -204,14 +204,18 @@ test('blockedPaths does not reject a merely similar prefix', () => {
   assert.equal(cjs.assertSafeRedirect('/logoutify', { blockedPaths: ['/logout'] }), '/logoutify');
 });
 
-test('blockedPaths ignores the query when matching', () => {
+test('blockedPaths ignores query and fragment structure after canonicalization', () => {
   const result = cjs.parseRedirectLocation('/logout?next=/home', { blockedPaths: ['/logout'] });
   assert.equal(result.code, C.BLOCKED_PATH);
+  assert.equal(cjs.parseRedirectLocation('/logout#next=/home', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
+  assert.equal(cjs.parseRedirectLocation('/a/../logout', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
 });
 
 test('blockedPaths inspects percent-decoded path layers', () => {
   const result = cjs.parseRedirectLocation('/l%6fgout', { blockedPaths: ['/logout'] });
   assert.equal(result.code, C.BLOCKED_PATH);
+  assert.equal(cjs.parseRedirectLocation('/l%6Fgout', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
+  assert.equal(cjs.parseRedirectLocation('/l%256fgout', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
   assert.equal(cjs.parseRedirectLocation('/logout%3fnext=x', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
   assert.equal(cjs.parseRedirectLocation('/logout%23x', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
 });
@@ -316,4 +320,74 @@ test('middleware works when next is omitted', () => {
   const response = fakeResponse();
   assert.doesNotThrow(() => guard.middleware()(null, response));
   assert.equal(typeof response.safeRedirect, 'function');
+});
+
+test('relative fallback is returned in canonical form', () => {
+  const guard = cjs.createRedirectGuard({ fallback: '/a/../home' });
+  assert.equal(guard.sanitize('//evil.com'), '/home');
+});
+
+test('absolute fallback is returned in canonical form', () => {
+  const guard = cjs.createRedirectGuard({
+    fallback: 'https://%74rusted.com/safe',
+    allowedHosts: ['trusted.com']
+  });
+  assert.equal(guard.sanitize('//evil.com'), 'https://trusted.com/safe');
+});
+
+test('blockedPaths matching is case sensitive because URL paths are case sensitive', () => {
+  assert.equal(cjs.assertSafeRedirect('/LOGOUT', { blockedPaths: ['/logout'] }), '/LOGOUT');
+  assert.equal(cjs.parseRedirectLocation('/logout', { blockedPaths: ['/logout'] }).code, C.BLOCKED_PATH);
+});
+
+test('blockedPaths trailing slash entries require the trailing slash', () => {
+  assert.equal(cjs.assertSafeRedirect('/logout', { blockedPaths: ['/logout/'] }), '/logout');
+  assert.equal(cjs.parseRedirectLocation('/logout/', { blockedPaths: ['/logout/'] }).code, C.BLOCKED_PATH);
+});
+
+test('safeRedirect rejects noninteger and non-3xx status values before writing', () => {
+  const guard = cjs.createRedirectGuard();
+  for (const status of [299, 400, 302.5, Number.NaN, '302', null]) {
+    const response = fakeResponse();
+    guard.middleware()(null, response, () => {});
+    throwsCode(() => response.safeRedirect('/dashboard', status), C.INVALID_INPUT, String(status));
+    assert.equal(response.headers.location, undefined, String(status));
+  }
+});
+
+test('safeRedirect does not write Location when statusCode assignment fails', () => {
+  const guard = cjs.createRedirectGuard();
+  const response = fakeResponse();
+  Object.defineProperty(response, 'statusCode', {
+    value: 200,
+    writable: false,
+    configurable: true
+  });
+  guard.middleware()(null, response, () => {});
+  throwsCode(() => response.safeRedirect('/dashboard', 302), C.INVALID_INPUT);
+  assert.equal(response.headers.location, undefined);
+  assert.equal(response.ended, false);
+});
+
+test('parse metadata percent triplets match canonical output casing', () => {
+  const result = cjs.parseRedirectLocation('/%e2%82%AC?x=%2f#%e2%82%AC');
+  assert.equal(result.safe, true);
+  assert.equal(result.pathname, '/%E2%82%AC');
+  assert.equal(result.search, '?x=%2F');
+  assert.equal(result.hash, '#%E2%82%AC');
+  assert.equal(result.value, '/%E2%82%AC?x=%2F#%E2%82%AC');
+});
+
+test('middleware coexists with response writeHead and redirect methods', () => {
+  const guard = cjs.createRedirectGuard();
+  const response = fakeResponse();
+  response.writeHead = function writeHead() { return this; };
+  response.redirect = function redirect() { return this; };
+  const originalWriteHead = response.writeHead;
+  const originalRedirect = response.redirect;
+  guard.middleware()(null, response, () => {});
+  response.safeRedirect('/dashboard', 302);
+  assert.equal(response.writeHead, originalWriteHead);
+  assert.equal(response.redirect, originalRedirect);
+  assert.equal(response.headers.location, '/dashboard');
 });

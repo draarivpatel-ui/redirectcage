@@ -9,12 +9,12 @@ hosts are explicitly allowlisted. It ships ESM, CommonJS and strict TypeScript
 definitions from one audited source of truth.
 
 - Zero runtime dependencies and zero devDependencies
-- 416 deterministic tests verified live with `npm test`
+- 444 deterministic tests verified live with `npm test`
 - ESM and CommonJS parity tested through package self-reference
 - Typed `RedirectCageError` failures with stable machine-readable codes
 - Defense against protocol-relative URLs, backslash confusion, encoded schemes,
-  control character smuggling, userinfo spoofing, IP literal obfuscation and
-  incomplete `scheme:` forms
+  control character smuggling, invalid UTF-8 byte sequences, userinfo spoofing,
+  IP literal obfuscation and incomplete `scheme:` forms
 - Optional exact origin and host allowlists with strict subdomain boundaries
 
 ## Install
@@ -49,8 +49,9 @@ sanitizeRedirect('https://evil.example'); // '/'
 ```
 
 `sanitizeRedirect` never throws because user-controlled input is hostile. It
-returns the validated `fallback`, which defaults to `/`. Configuration errors,
-including an unsafe fallback or an unknown option key, still throw loudly.
+returns the validated and canonicalized `fallback`, which defaults to `/`.
+Configuration errors, including an unsafe fallback or an unknown option key,
+still throw loudly.
 
 ## Strict assertions and predicates
 
@@ -190,8 +191,8 @@ the `Location` header is written.
 | `allowQuery` | `true` | Permit literal or encoded query structure. |
 | `allowHash` | `true` | Permit literal or encoded fragment structure. |
 | `normalizeDotSegments` | `true` | Canonicalize dot segments using WHATWG URL semantics. When false, direct and encoded dot segments are rejected. |
-| `blockedPaths` | `[]` | Canonical paths that must never be targets. An entry also covers its slash-delimited descendants and percent-decoded equivalents. |
-| `fallback` | `'/'` | Safe value returned by `sanitize` for rejected input. It is validated under the complete policy at configuration time. |
+| `blockedPaths` | `[]` | Canonical paths that must never be targets. Matching is case sensitive because URL paths are case sensitive. An entry also covers its slash-delimited descendants and percent-decoded equivalents. |
+| `fallback` | `'/'` | Safe value returned by `sanitize` for rejected input. It is validated under the complete policy and canonicalized at configuration time. |
 | `maxLength` | `2048` | Maximum input length in UTF-16 code units, checked before decoding. |
 | `maxDecodeLayers` | `8` | Maximum nested percent-decoding layers inspected. Values from 1 through 16 are accepted. |
 | `throwOnUnsafe` | `false` | Make `sanitize` throw on unsafe input instead of returning `fallback`. |
@@ -212,6 +213,15 @@ text is percent encoded canonically and percent hex triplets are uppercase. The
 output is always the normalized value returned by the library. Do not use the
 original input after validation.
 
+Percent-decoded byte sequences must be valid UTF-8. Overlong encodings, isolated
+continuation bytes, encoded surrogate code points and other malformed byte
+sequences are rejected instead of being interpreted differently by lenient
+decoders.
+
+`blockedPaths` uses the case-sensitive path comparison required by the URL
+standard. `/LOGOUT` and `/logout` are different paths. An entry ending in a
+slash is also a distinct path, so `/logout/` does not block `/logout`.
+
 Empty query and fragment markers are dropped during canonicalization. Query and
 fragment content is allowed by default because it is often required for return
 URLs, but both can be disabled independently.
@@ -228,11 +238,12 @@ The test suite includes individual vectors for:
 - encoded and double-encoded scheme construction
 - `https:evil.example` and other incomplete scheme forms
 - userinfo and at-sign authority spoofing
-- malformed percent encoding and bounded nested decoding
+- malformed percent encoding, invalid UTF-8 byte sequences and bounded nested decoding
 - Unicode compatibility characters that normalize into URL structural characters
+- slash lookalike code points that must remain inert percent-encoded path text
 - trailing-dot host confusion and strict host boundary bypasses
 - IPv4 shorthand, hexadecimal, decimal and octal forms plus IPv6 literals
-- port mismatch and default-port canonicalization
+- port mismatch, empty-port and default-port canonicalization
 - maximum-length denial-of-service input
 - prototype-polluting option keys and unsafe fallback configuration
 
@@ -251,7 +262,16 @@ Only `http` and `https` can be selected in `allowProtocols`. Browser execution
 schemes and local resource schemes are never enabled. Bare relative references
 are intentionally rejected in favor of canonical root-relative paths. Raw
 whitespace is rejected; percent-encoded regular spaces remain encoded in the
-returned value.
+returned value. Slash lookalikes such as U+2044 and U+2215 are not path or
+authority separators under the WHATWG URL standard or Unicode NFKC. When such a
+code point is otherwise valid path text, the canonical output keeps it percent
+encoded rather than treating it as a slash.
+
+`blockedPaths` is a URL path policy, not a framework-specific route matcher.
+Frameworks that strip matrix parameters, collapse repeated slashes or apply
+additional Unicode normalization before routing can have route behavior that no
+generic URL library can predict. Keep routing and block policy on the same
+canonical path model.
 
 `allowedHosts` is scheme-independent by design. Use `allowedOrigins` or
 `allowProtocols: ['https']` when plaintext HTTP must not be accepted. Enabling

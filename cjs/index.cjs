@@ -18,6 +18,7 @@ const CODE = Object.freeze({
   CONTROL_CHARACTER: 'ERR_REDIRECTCAGE_CONTROL_CHARACTER',
   UNICODE_NORMALIZATION: 'ERR_REDIRECTCAGE_UNICODE_NORMALIZATION',
   MALFORMED_ENCODING: 'ERR_REDIRECTCAGE_MALFORMED_ENCODING',
+  INVALID_UTF8: 'ERR_REDIRECTCAGE_INVALID_UTF8',
   ENCODED_ATTACK: 'ERR_REDIRECTCAGE_ENCODED_ATTACK',
   PROTOCOL_RELATIVE: 'ERR_REDIRECTCAGE_PROTOCOL_RELATIVE',
   BACKSLASH: 'ERR_REDIRECTCAGE_BACKSLASH',
@@ -70,7 +71,6 @@ const BASE_URL = 'https://redirectcage.invalid/';
 const SCHEME_RE = /^([A-Za-z][A-Za-z0-9+.-]*):/;
 const RAW_FORBIDDEN_RE = /[\u0000-\u001f\u007f-\u009f\s\p{Cf}\p{Cs}]/u;
 const DECODED_FORBIDDEN_RE = /[\u0000-\u001f\u007f-\u009f\p{Cf}\p{Cs}\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/u;
-const HEX_RE = /^[0-9a-fA-F]{2}$/;
 const VALID_PERCENT_RE = /%[0-9a-fA-F]{2}/;
 const PERCENT_TRIPLET_RE = /%[0-9a-fA-F]{2}/g;
 const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
@@ -94,7 +94,7 @@ const KNOWN_OPTION_KEYS = new Set([
 const RESERVED_OPTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder('utf-8');
+const textDecoder = new TextDecoder('utf-8', { fatal: true });
 
 function isPlainObject(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -185,10 +185,25 @@ function countChar(value, needle) {
   return count;
 }
 
+function hexValue(code) {
+  if (code >= 48 && code <= 57) return code - 48;
+  if (code >= 65 && code <= 70) return code - 55;
+  if (code >= 97 && code <= 102) return code - 87;
+  return -1;
+}
+
+function percentByteAt(value, index) {
+  if (value.charCodeAt(index) !== 37) return -1;
+  const high = hexValue(value.charCodeAt(index + 1));
+  const low = hexValue(value.charCodeAt(index + 2));
+  if (high === -1 || low === -1) return -1;
+  return high * 16 + low;
+}
+
 function validatePercentEncoding(value) {
   for (let index = 0; index < value.length; index += 1) {
     if (value.charCodeAt(index) !== 37) continue;
-    if (!HEX_RE.test(value.slice(index + 1, index + 3))) return false;
+    if (percentByteAt(value, index) === -1) return false;
     index += 2;
   }
   return true;
@@ -200,18 +215,23 @@ function appendUtf8(bytes, char) {
 }
 
 function decodePercentLayer(value) {
+  if (value.indexOf('%') === -1) return { value, changed: false, invalidUtf8: false };
   const bytes = [];
   let changed = false;
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code === 37 && HEX_RE.test(value.slice(index + 1, index + 3))) {
-      bytes.push(Number.parseInt(value.slice(index + 1, index + 3), 16));
+    const encodedByte = percentByteAt(value, index);
+    if (encodedByte !== -1) {
+      bytes.push(encodedByte);
       changed = true;
       index += 2;
       continue;
     }
-    let char = value[index];
     const first = value.charCodeAt(index);
+    if (first <= 0x7f) {
+      bytes.push(first);
+      continue;
+    }
+    let char = value[index];
     if (
       first >= 0xd800 && first <= 0xdbff &&
       index + 1 < value.length &&
@@ -223,7 +243,11 @@ function decodePercentLayer(value) {
     }
     appendUtf8(bytes, char);
   }
-  return { value: textDecoder.decode(Uint8Array.from(bytes)), changed };
+  try {
+    return { value: textDecoder.decode(Uint8Array.from(bytes)), changed, invalidUtf8: false };
+  } catch (error) {
+    return { value: null, changed, invalidUtf8: true };
+  }
 }
 
 function leadingSlashCount(value) {
@@ -272,9 +296,9 @@ function successResult(input, value, kind, url) {
     host: absolute ? url.host : null,
     hostname: absolute ? url.hostname : null,
     port: absolute && url.port !== '' ? url.port : null,
-    pathname: url.pathname,
-    search: url.search,
-    hash: url.hash
+    pathname: uppercasePercentTriplets(url.pathname),
+    search: uppercasePercentTriplets(url.search),
+    hash: uppercasePercentTriplets(url.hash)
   });
 }
 
@@ -332,6 +356,10 @@ function parseAllowedOriginEntry(value) {
   }
   if (authority.indexOf('@') !== -1) {
     configError('allowedOrigins entries must not contain userinfo', value);
+  }
+  const suffix = value.slice(scheme.length + 2 + authority.length);
+  if (suffix !== '' && suffix !== '/') {
+    configError('allowedOrigins entries must not contain a path', value);
   }
   if (value.indexOf('?') !== -1 || value.indexOf('#') !== -1) {
     configError('allowedOrigins entries must not contain a query or fragment', value);
@@ -501,8 +529,11 @@ function validateDependentConfig(config) {
   }
 }
 
+let cachedDefaultConfig = null;
+
 function buildConfig(options, base) {
   if (options === undefined && base) return base;
+  if (options === undefined && !base && cachedDefaultConfig) return cachedDefaultConfig;
   const config = base ? copyConfig(base) : defaultConfig();
   if (options !== undefined) {
     if (!isPlainObject(options)) configError('options must be an object', options);
@@ -542,7 +573,10 @@ function buildConfig(options, base) {
   if (!probe.safe) {
     configError('fallback is not safe under the configured policy (' + probe.code + ')', config.fallback);
   }
-  return Object.freeze(config);
+  config.fallback = probe.value;
+  const frozen = Object.freeze(config);
+  if (options === undefined && !base) cachedDefaultConfig = frozen;
+  return frozen;
 }
 
 function scanUnicodeHazards(value) {
@@ -627,6 +661,9 @@ function prepareInput(input, config) {
   let layers = 0;
   while (layers < config.maxDecodeLayers) {
     const decoded = decodePercentLayer(current);
+    if (decoded.invalidUtf8) {
+      return failureResult(input, CODE.INVALID_UTF8, 'percent-decoding produces bytes that are not valid UTF-8');
+    }
     if (!decoded.changed) break;
     current = decoded.value;
     layers += 1;
@@ -687,6 +724,7 @@ function decodedPathVariants(pathname, config) {
 }
 
 function blockedPathFailure(input, pathname, config) {
+  if (config.blockedPaths.length === 0) return null;
   for (const variant of decodedPathVariants(pathname, config)) {
     let structuralPath = variant;
     const queryIndex = structuralPath.indexOf('?');
@@ -886,12 +924,12 @@ function writeSafeRedirect(response, target, status, config) {
   }
   const finalStatus = validateRedirectStatus(status === undefined ? 302 : status);
   const location = sanitizeWithConfig(target, config);
-  response.setHeader('Location', location);
   try {
     response.statusCode = finalStatus;
   } catch (error) {
     throwError(CODE.INVALID_INPUT, 'response statusCode could not be assigned', response, error);
   }
+  response.setHeader('Location', location);
   if (typeof response.end === 'function') response.end();
   return location;
 }

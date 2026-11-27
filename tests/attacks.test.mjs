@@ -21,6 +21,8 @@ const protocolRelative = [
   '/%2f%65vil.com',
   '/.//evil.com',
   '/..//evil.com',
+  '/a/../../..//evil.com',
+  '/%2f/evil.com',
   '/%2e//evil.com',
   '/./%2f/evil.com',
   '/.%2f/evil.com',
@@ -43,6 +45,7 @@ const backslashes = [
   '\\//evil.com',
   'https:\\evil.com',
   'https:\\\\evil.com',
+  'https://trusted.com\\@evil.com',
   '/%5cevil.com',
   '/%5Cevil.com',
   '%5cevil.com',
@@ -133,7 +136,9 @@ const invalidAbsoluteSyntax = [
   'https://',
   'https://?x=1',
   'https://#x',
-  'http:evil.com'
+  'http:evil.com',
+  'http:/evil.com',
+  'http:///evil.com'
 ];
 
 for (const input of invalidAbsoluteSyntax) {
@@ -172,10 +177,18 @@ test('encoded at sign in host cannot become authority userinfo', () => {
   assert.equal(result.safe, false);
 });
 
+test('trusted text in query or fragment does not allow an evil host', () => {
+  for (const input of ['https://evil.com#trusted.com', 'https://evil.com?https://trusted.com']) {
+    const result = parseUnsafe(cjs, input, { allowedHosts: ['trusted.com'] });
+    assert.equal(result.code, C.HOST_NOT_ALLOWED, JSON.stringify(input));
+  }
+});
+
 test('single slash at-sign paths remain valid relative paths', () => {
   assert.equal(cjs.assertSafeRedirect('/@evil.com'), '/@evil.com');
   assert.equal(cjs.assertSafeRedirect('/@user'), '/@user');
   assert.equal(cjs.assertSafeRedirect('/users/@user'), '/users/@user');
+  assert.equal(cjs.assertSafeRedirect('/;/@evil.com'), '/;/@evil.com');
 });
 
 const crlfVectors = [
@@ -248,3 +261,30 @@ test('fullwidth dot cannot create a dot segment before authority confusion', () 
   const result = parseUnsafe(cjs, '/．//evil.com');
   assert.equal(result.code, C.UNICODE_NORMALIZATION);
 });
+
+const invalidUtf8Vectors = [
+  '/%c0%af/evil.com',
+  '/%e0%80%af/evil.com',
+  '/%ed%a0%80/x',
+  '/%ff%fe'
+];
+
+for (const input of invalidUtf8Vectors) {
+  test('invalid UTF-8 byte sequence is rejected: ' + JSON.stringify(input), () => {
+    const result = parseUnsafe(cjs, input);
+    assert.equal(result.code, C.INVALID_UTF8);
+  });
+}
+
+const inertSlashLookalikes = ['/%E2%81%84%EF%B8%8F?x', '/\u2215\u2215evil.com'];
+for (const input of inertSlashLookalikes) {
+  test('slash lookalike remains percent-encoded path text: ' + JSON.stringify(input), () => {
+    const result = cjs.parseRedirectLocation(input);
+    assert.equal(result.safe, true);
+    assert.equal(result.kind, 'relative');
+    assert.equal(result.value.startsWith('/'), true);
+    assert.equal(result.value.startsWith('//'), false);
+    assert.equal(result.value.includes('\\'), false);
+    assert.match(result.value, /^[\x20-\x7e]*$/);
+  });
+}
