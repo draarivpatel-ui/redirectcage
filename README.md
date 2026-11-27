@@ -1,5 +1,7 @@
 # redirectcage
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/draarivpatel-ui/redirectcage/badge)](https://scorecard.dev/viewer/?uri=github.com/draarivpatel-ui/redirectcage)
+
 Zero-dependency CWE-601 open redirect and return URL protection for Node.js.
 
 `redirectcage` validates untrusted redirect targets before they reach a
