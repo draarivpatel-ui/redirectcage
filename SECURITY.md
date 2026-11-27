@@ -12,23 +12,24 @@ upgrade promptly when a security release is published.
 
 ## Reporting a vulnerability
 
-Report suspected vulnerabilities privately through the GitHub Security
-Advisories workflow for `draarivpatel-ui/redirectcage`. Do not open a public
-issue, pull request or discussion with a working exploit.
+Do not open a public issue for a suspected vulnerability. [Report a vulnerability privately through GitHub](https://github.com/draarivpatel-ui/redirectcage/security/advisories/new).
 
-Include:
+Please include:
 
-- The exact package version and Node.js version
-- Whether input came through `sanitizeRedirect`, `assertSafeRedirect`,
-  `isSafeRedirect`, `parseRedirectLocation` or `res.safeRedirect`
-- The complete options object, with secrets removed
-- A minimal input string and the expected safe result
-- The actual normalized output or error code
-- Whether the behavior differs between ESM and CommonJS or between operating
-  systems
+- A minimal reproduction that uses synthetic input only.
+- The affected project version, commit or action ref, and Node.js version.
+- The expected security boundary and the observed violation.
+- Logs, output, or proof-of-concept code needed to reproduce the finding, with real secrets removed.
 
-A useful report does not need a large application reproduction. A small script
-that imports the package and prints the parse result is enough.
+Never include a real token, cookie, password, private key, production log line or real personal data in a report.
+
+Vulnerability handling steps:
+
+1. The maintainer acknowledges the private report within 72 hours.
+2. The maintainer reproduces the finding against the latest supported version and confirms severity within 14 days when enough information is available.
+3. A fix is developed privately, with regression coverage where practical.
+4. The maintainer coordinates the advisory, affected versions, reporter credit and disclosure date with the reporter.
+5. The target coordinated disclosure window is 90 days or less from acknowledgment. If more time is needed, the maintainer and reporter agree on a new date before disclosure.
 
 ## Scope
 
