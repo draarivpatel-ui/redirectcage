@@ -1,0 +1,55 @@
+{
+  "name": "redirectcage",
+  "version": "1.0.0",
+  "description": "Zero-dependency CWE-601 open redirect and return URL protection for Node.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/draarivpatel-ui/redirectcage.git"
+  },
+  "homepage": "https://github.com/draarivpatel-ui/redirectcage#readme",
+  "bugs": {
+    "url": "https://github.com/draarivpatel-ui/redirectcage/issues"
+  },
+  "type": "module",
+  "main": "./cjs/index.cjs",
+  "module": "./src/index.mjs",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.mjs",
+      "require": "./cjs/index.cjs"
+    }
+  },
+  "files": [
+    "src",
+    "cjs",
+    "types",
+    "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "GOOD_FIRST_ISSUES.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:windows": "node --test tests/allowlist.test.mjs tests/api.test.mjs tests/attacks.test.mjs tests/fuzz.test.mjs tests/hygiene.test.mjs tests/parity.test.mjs tests/relative.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "security",
+    "open-redirect",
+    "cwe-601",
+    "redirect",
+    "return-url",
+    "url-validation",
+    "owasp",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "sideEffects": false,
+  "dependencies": {},
+  "devDependencies": {}
+}
