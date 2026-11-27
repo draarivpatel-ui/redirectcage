@@ -10,7 +10,7 @@ such as `/dashboard?tab=1#top` are accepted unless exact external origins or
 hosts are explicitly allowlisted. It ships ESM, CommonJS and strict TypeScript
 definitions from one audited source of truth.
 
-- Zero runtime dependencies and zero devDependencies
+- Zero runtime dependencies; fast-check fuzz tooling is development-only
 - 444 deterministic tests verified live with `npm test`
 - ESM and CommonJS parity tested through package self-reference
 - Typed `RedirectCageError` failures with stable machine-readable codes

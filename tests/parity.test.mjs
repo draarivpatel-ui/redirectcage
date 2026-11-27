@@ -138,7 +138,10 @@ test('package manifest declares clean dual-module packaging', async () => {
   assert.equal(pkg.exports['.'].import, './src/index.mjs');
   assert.equal(pkg.exports['.'].require, './cjs/index.cjs');
   assert.deepEqual(pkg.dependencies, {});
-  assert.deepEqual(pkg.devDependencies, {});
+  assert.ok(Object.keys(pkg.devDependencies || {}).includes('fast-check'));
+  for (const name of Object.keys(pkg.devDependencies || {})) {
+    assert.equal(pkg.dependencies[name], undefined, `${name} must stay development-only`);
+  }
   assert.equal(pkg.sideEffects, false);
   assert.equal(pkg.engines.node, '>=18');
 });

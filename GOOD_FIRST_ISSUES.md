@@ -23,8 +23,8 @@ action. Keep the descriptions short and verify each code against `types/index.d.
 ## 4. Add a TypeScript consumer smoke fixture
 
 Create a small type-only fixture that imports every public function and option
-type. It must not add TypeScript or any other devDependency. CI can inspect it
-as a source fixture rather than compiling it.
+type. It must not add TypeScript or any additional devDependency. CI can inspect
+it as a source fixture rather than compiling it.
 
 ## 5. Write a migration note for permissive redirect code
 

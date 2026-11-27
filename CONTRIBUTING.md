@@ -4,8 +4,8 @@ Thank you for helping improve `redirectcage`.
 
 ## Ground rules
 
-- Keep the package zero-dependency. Do not add runtime dependencies or
-  devDependencies.
+- Keep the package free of runtime dependencies. Development-only test tooling
+  must stay out of `dependencies`.
 - Preserve strict fail-closed behavior for untrusted input.
 - Keep `src/index.mjs` the single source of truth. Never edit `cjs/index.cjs`
   directly.
@@ -20,11 +20,13 @@ Thank you for helping improve `redirectcage`.
 
 ## Development setup
 
-No install step is required because the package has no dependencies.
+No install step is required for the core suite. Run `npm ci` once before the fast-check fuzz suite.
 
 ```sh
 node scripts/build-cjs.mjs
 npm test
+npm ci
+npm run test:fuzz
 npm pack --dry-run
 ```
 
