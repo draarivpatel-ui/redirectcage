@@ -201,10 +201,10 @@ function percentByteAt(value, index) {
 }
 
 function validatePercentEncoding(value) {
-  for (let index = 0; index < value.length; index += 1) {
-    if (value.charCodeAt(index) !== 37) continue;
+  let index = value.indexOf('%');
+  while (index !== -1) {
     if (percentByteAt(value, index) === -1) return false;
-    index += 2;
+    index = value.indexOf('%', index + 3);
   }
   return true;
 }
